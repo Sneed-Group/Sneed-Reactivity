@@ -36,7 +36,13 @@ mining_processes = [
     "cgminer.exe",
     "ethminer.exe",
     "nicehash.exe",
-    "miner.exe"
+    "miner.exe",
+    "miner",
+    "xmrig",
+    "bfgminer",
+    "cgminer",
+    "ethminer",
+    "nicehash"
 ]
 
 # Folders to monitor
