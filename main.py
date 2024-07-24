@@ -238,12 +238,11 @@ def monitor_registry_changes():
 
 # Verify TLS Certificates
 def verify_tls_cert(url):
-    while True:
-        try:
-            response = requests.get(url, verify=certifi.where())
-            print(f"TLS certificate valid for {url}")
-        except requests.exceptions.SSLError as e:
-            print(f"TLS certificate error for {url}: {e}")
+    try:
+        response = requests.get(url, verify=certifi.where())
+        print(f"TLS certificate valid for {url}")
+    except requests.exceptions.SSLError as e:
+        print(f"TLS certificate error for {url}: {e}")
 
 def monitor_tls_certificates():
     urls = monitored_urls
