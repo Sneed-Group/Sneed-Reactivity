@@ -9,3 +9,4 @@ excel.exe
 powerpnt.exe
 firefox.exe
 chrome.exe
+gimp.exe
