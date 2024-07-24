@@ -1,2 +1,2 @@
 # Sneed-Proactivity
-Cross-Platform Open Proactive AV
+Cross-Platform Open Reactive AV
