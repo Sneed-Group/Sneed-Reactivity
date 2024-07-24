@@ -150,4 +150,105 @@ def get_gpu_usage():
             for gpu in gpus:
                 gpu_details = tf.config.experimental.get_memory_info(gpu.name)
                 memory_total = gpu_details['total']
-                memory_free = gpu_detai
+                memory_free = gpu_details['free']
+                usage = (memory_total - memory_free) / memory_total * 100
+                return usage
+        except Exception as e:
+            print(f"Error getting GPU usage: {e}")
+    return 0
+
+def kill_suspicious_processes():
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            proc_name = proc.info['name'].lower()
+            cmdline = " ".join(proc.info['cmdline']).lower()
+
+            if proc_name in mining_processes and proc_name not in bypassed_processes:
+                print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
+                proc.terminate()
+                proc.wait()
+
+            if (bitcoin_regex.search(cmdline) or
+                ethereum_regex.search(cmdline) or
+                monero_regex.search(cmdline)) and proc_name not in bypassed_processes:
+                print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']})")
+                proc.terminate()
+                proc.wait()
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            print(f"Error terminating process: {e}")
+
+# Monitor Registry Changes (Windows)
+def monitor_registry_changes():
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion"
+    try:
+        registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ)
+        while True:
+            try:
+                for i in range(winreg.QueryInfoKey(registry_key)[1]):  # Number of subkeys
+                    subkey_name = winreg.EnumKey(registry_key, i)
+                    print(f"Registry subkey detected: {subkey_name}")
+                
+                time.sleep(10)
+            except WindowsError as e:
+                print(f"Registry monitoring error: {e}")
+    finally:
+        winreg.CloseKey(registry_key)
+
+# Verify TLS Certificates
+def verify_tls_cert(url):
+    try:
+        response = requests.get(url, verify=certifi.where())
+        print(f"TLS certificate valid for {url}")
+    except requests.exceptions.SSLError as e:
+        print(f"TLS certificate error for {url}: {e}")
+
+def monitor_tls_certificates():
+    urls = monitored_urls
+    while True:
+        for url in urls:
+            verify_tls_cert(url)
+        time.sleep(3600)  # Check every hour
+
+# Detecting Suspicious Browser Activity
+def monitor_browser(browser='chrome'):
+    if browser == 'chrome':
+        driver = setup_chrome_driver()
+    elif browser == 'firefox':
+        driver = setup_firefox_driver()
+    else:
+        raise ValueError("Unsupported browser!")
+
+    while True:
+        try:
+            logs = driver.get_log('performance')
+            for entry in logs:
+                for url in monitored_urls:
+                    if url in entry['message']:
+                        print(f'Alert: Potential cookie or token theft attempt detected on {url}!')
+                        # Kill process involved in suspicious browser activity
+                        for proc in psutil.process_iter(['pid', 'name', 'connections']):
+                            if any(url in conn.raddr for conn in proc.info['connections']):
+                                if proc.info['name'].lower() not in bypassed_processes:
+                                    print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
+                                    proc.terminate()
+                                    proc.wait()
+        except Exception as e:
+            print(f"Error in browser monitoring: {e}")
+        time.sleep(1)
+    driver.quit()
+
+# Start Monitoring in Threads
+threads = [
+    threading.Thread(target=start_file_system_monitor),
+    threading.Thread(target=monitor_cpu_gpu_usage),
+    threading.Thread(target=monitor_registry_changes),
+    threading.Thread(target=monitor_tls_certificates),
+    threading.Thread(target=monitor_browser, args=('chrome',)),
+    threading.Thread(target=monitor_browser, args=('firefox',))
+]
+
+for thread in threads:
+    thread.start()
+
+for thread in threads:
+    thread.join()
