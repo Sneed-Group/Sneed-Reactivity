@@ -8,7 +8,10 @@ import winreg
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from pathlib import Path
 import requests
 import certifi
@@ -92,21 +95,18 @@ class SuspiciousFileHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         if event.event_type in ['created', 'modified', 'deleted']:
             file_owner = get_file_owner(event.src_path)
-            current_user = win32security.GetUserName()
-            if file_owner.lower() not in [current_user.lower(), "trustedinstaller"]:
+            current_user = getpass.getuser()  # Get current user
+            if file_owner.lower() not in [current_user.lower(), "trustedinstaller", "unknown"]:
                 print(f"Suspicious file operation: {event.event_type} {event.src_path} by {file_owner}")
 
 def get_file_owner(file_path):
     try:
-        # On Windows, use the current user’s name
-        if os.name == 'nt':
-            import win32security
+        if os.name == 'nt':  # Windows
             sd = win32security.GetFileSecurity(file_path, win32security.OWNER_SECURITY_INFORMATION)
             owner_sid = sd.GetSecurityDescriptorOwner()
             owner, _ = win32security.LookupAccountSid(None, owner_sid)
             return owner
-        else:
-            # On Unix-like systems, use the owner of the file
+        else:  # Unix-like systems
             import pwd
             file_stat = os.stat(file_path)
             return pwd.getpwuid(file_stat.st_uid).pw_name
@@ -181,19 +181,19 @@ def kill_suspicious_processes():
 # Monitor Registry Changes (Windows)
 def monitor_registry_changes():
     reg_path = r"Software\Microsoft\Windows\CurrentVersion"
-    registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ)
-    
-    while True:
-        try:
-            for i in range(winreg.QueryInfoKey(registry_key)[1]):  # Number of subkeys
-                subkey_name = winreg.EnumKey(registry_key, i)
-                print(f"Registry subkey detected: {subkey_name}")
-            
-            time.sleep(10)
-        except WindowsError as e:
-            print(f"Registry monitoring error: {e}")
-
-    winreg.CloseKey(registry_key)
+    try:
+        registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ)
+        while True:
+            try:
+                for i in range(winreg.QueryInfoKey(registry_key)[1]):  # Number of subkeys
+                    subkey_name = winreg.EnumKey(registry_key, i)
+                    print(f"Registry subkey detected: {subkey_name}")
+                
+                time.sleep(10)
+            except WindowsError as e:
+                print(f"Registry monitoring error: {e}")
+    finally:
+        winreg.CloseKey(registry_key)
 
 # Verify TLS Certificates
 def verify_tls_cert(url):
@@ -217,13 +217,16 @@ def monitor_tls_certificates():
 # Detecting Suspicious Browser Activity
 def monitor_browser(browser='chrome'):
     if browser == 'chrome':
-        caps = DesiredCapabilities.CHROME
-        caps['goog:loggingPrefs'] = {'performance': 'ALL'}
-        driver = webdriver.Chrome(desired_capabilities=caps)
+        chrome_options = ChromeOptions()
+        chrome_options.add_argument('--enable-logging')
+        chrome_options.add_argument('--v=1')
+        service = ChromeService()
+        driver = webdriver.Chrome(service=service, options=chrome_options)
     elif browser == 'firefox':
-        caps = DesiredCapabilities.FIREFOX.copy()
-        caps['loggingPrefs'] = {'performance': 'ALL'}
-        driver = webdriver.Firefox(desired_capabilities=caps)
+        firefox_options = FirefoxOptions()
+        firefox_options.log.level = "TRACE"
+        service = FirefoxService()
+        driver = webdriver.Firefox(service=service, options=firefox_options)
     else:
         raise ValueError("Unsupported browser!")
 
