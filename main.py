@@ -190,6 +190,7 @@ def get_gpu_usage():
     return 0
 
 def kill_suspicious_processes():
+    print("Realtime AntiMalware active...")
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             proc_name = proc.info['name'].lower()
@@ -291,10 +292,9 @@ def setup_firefox_driver():
     return webdriver.Firefox(service=service, options=options)
 
 def realtimeAV():
-    print("Realtime AntiMalware active...")
     while True:
         kill_suspicious_processes()
-        time.sleep(10) # check for malware every 10 seconds
+        time.sleep(3) # check for malware every 3 seconds
 
 # Start Monitoring in Threads
 threads = [
