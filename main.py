@@ -9,17 +9,33 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.chrome.service import Service as ChromeService
 from pathlib import Path
 import requests
 import certifi
 import getpass
 import tensorflow as tf  # TensorFlow for GPU monitoring
 import re  # Regular expressions for address detection
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.firefox import GeckoDriverManager
+import yara  # YARA for malware scanning
+
+# YARA Rules
+def load_yara_rules():
+    yara_rules = []
+    yara_dir = Path('yara')
+    if yara_dir.exists() and yara_dir.is_dir():
+        for yara_file in yara_dir.rglob('*.yar'):
+            try:
+                rule = yara.compile(filepath=str(yara_file))
+                yara_rules.append(rule)
+            except Exception as e:
+                print(f"Error compiling YARA rule {yara_file}: {e}")
+    else:
+        print(f"YARA rules directory not found: {yara_dir}")
+    return yara_rules
+
+yara_rules = load_yara_rules()
 
 # Regular expressions for detecting crypto addresses
 bitcoin_regex = re.compile(r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}', re.IGNORECASE)
@@ -63,11 +79,10 @@ def get_folders_to_monitor():
 
     # Common user directories
     user_dirs = ['Downloads', 'Documents', 'Pictures', 'Videos']
-    for d in user_dirs:
-        user_folder = Path.home()
-        for folder in user_folder.iterdir():
-            if folder.is_dir() and any(d.lower() in folder.name.lower() for d in user_dirs):
-                folders.append(str(folder))
+    user_folder = Path.home()
+    for folder in user_folder.iterdir():
+        if folder.is_dir() and any(d.lower() in folder.name.lower() for d in user_dirs):
+            folders.append(str(folder))
 
     # System directories
     if os.name == 'nt':  # Windows
@@ -98,24 +113,29 @@ class SuspiciousFileHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         if event.event_type in ['created', 'modified', 'deleted']:
             file_owner = get_file_owner(event.src_path)
-            current_user = getpass.getuser()  # Get current user
+            current_user = get_current_user()
             if file_owner.lower() not in [current_user.lower(), "trustedinstaller"]:
                 print(f"Suspicious file operation: {event.event_type} {event.src_path} by {file_owner}")
 
 def get_file_owner(file_path):
     try:
-        if os.name == 'nt':  # Windows
+        # On Windows, use the current user’s name
+        if os.name == 'nt':
             sd = win32security.GetFileSecurity(file_path, win32security.OWNER_SECURITY_INFORMATION)
             owner_sid = sd.GetSecurityDescriptorOwner()
             owner, _ = win32security.LookupAccountSid(None, owner_sid)
             return owner
-        else:  # Unix-like systems
+        else:
+            # On Unix-like systems, use the owner of the file
             import pwd
             file_stat = os.stat(file_path)
             return pwd.getpwuid(file_stat.st_uid).pw_name
     except Exception as e:
         print(f"Error getting file owner: {e}")
         return "Unknown"
+
+def get_current_user():
+    return getpass.getuser()
 
 def start_file_system_monitor():
     observer = Observer()
@@ -129,6 +149,15 @@ def start_file_system_monitor():
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
+
+def scan_for_malware(file_path):
+    if yara_rules:
+        for rule in yara_rules:
+            matches = rule.match(filepath=file_path)
+            if matches:
+                print(f"Malware detected in file: {file_path}")
+                return True
+    return False
 
 # Detect Excessive CPU Workloads
 def monitor_cpu_gpu_usage():
@@ -171,12 +200,20 @@ def kill_suspicious_processes():
                 proc.terminate()
                 proc.wait()
 
+            # Check for crypto addresses in command line arguments
             if (bitcoin_regex.search(cmdline) or
                 ethereum_regex.search(cmdline) or
                 monero_regex.search(cmdline)) and proc_name not in bypassed_processes:
                 print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']})")
                 proc.terminate()
                 proc.wait()
+
+            # Scan files for malware
+            for file_path in proc.info.get('cmdline', []):
+                if os.path.isfile(file_path):
+                    if scan_for_malware(file_path):
+                        proc.terminate()
+                        proc.wait()
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
             print(f"Error terminating process: {e}")
 
@@ -190,10 +227,11 @@ def monitor_registry_changes():
                 for i in range(winreg.QueryInfoKey(registry_key)[1]):  # Number of subkeys
                     subkey_name = winreg.EnumKey(registry_key, i)
                     print(f"Registry subkey detected: {subkey_name}")
-                
+
                 time.sleep(10)
             except WindowsError as e:
                 print(f"Registry monitoring error: {e}")
+
     finally:
         winreg.CloseKey(registry_key)
 
@@ -206,26 +244,11 @@ def verify_tls_cert(url):
         print(f"TLS certificate error for {url}: {e}")
 
 def monitor_tls_certificates():
+    urls = monitored_urls
     while True:
-        for url in monitored_urls:
+        for url in urls:
             verify_tls_cert(url)
         time.sleep(3600)  # Check every hour
-
-# Browser WebDriver Setup Functions
-def setup_chrome_driver():
-    chrome_options = ChromeOptions()
-    chrome_options.add_argument('--enable-logging')
-    chrome_options.add_argument('--v=1')
-    service = ChromeService(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
-
-def setup_firefox_driver():
-    firefox_options = FirefoxOptions()
-    firefox_options.log.level = "TRACE"
-    service = FirefoxService(GeckoDriverManager().install())
-    driver = webdriver.Firefox(service=service, options=firefox_options)
-    return driver
 
 # Detecting Suspicious Browser Activity
 def monitor_browser(browser='chrome'):
@@ -236,29 +259,35 @@ def monitor_browser(browser='chrome'):
     else:
         raise ValueError("Unsupported browser!")
 
-    try:
-        while True:
-            logs = []
-            if browser == 'chrome':
-                logs = driver.get_log('browser')
-            elif browser == 'firefox':
-                logs = driver.get_log('browser')
+    while True:
+        logs = driver.get_log('performance')
+        for entry in logs:
+            for url in monitored_urls:
+                if url in entry['message']:
+                    print(f'Alert: Potential cookie or token theft attempt detected on {url}!')
 
-            for entry in logs:
-                for url in monitored_urls:
-                    if url in entry['message']:
-                        print(f'Alert: Potential cookie or token theft attempt detected on {url}!')
-                        # Kill process involved in suspicious browser activity
-                        for proc in psutil.process_iter(['pid', 'name', 'connections']):
-                            if any(url in conn.raddr for conn in proc.info['connections']):
-                                if proc.info['name'].lower() not in bypassed_processes:
-                                    print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
-                                    proc.terminate()
-                                    proc.wait()
-    except Exception as e:
-        print(f"Error in browser monitoring: {e}")
-    finally:
-        driver.quit()
+                    # Kill process involved in suspicious browser activity
+                    for proc in psutil.process_iter(['pid', 'name', 'connections']):
+                        if any(url in conn.raddr for conn in proc.info['connections']):
+                            if proc.info['name'].lower() not in bypassed_processes:
+                                print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
+                                proc.terminate()
+                                proc.wait()
+        time.sleep(1)
+    driver.quit()
+
+# Setup Chrome and Firefox Drivers
+def setup_chrome_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in headless mode
+    service = ChromeService()
+    return webdriver.Chrome(service=service, options=options)
+
+def setup_firefox_driver():
+    options = webdriver.FirefoxOptions()
+    options.add_argument("--headless")  # Run in headless mode
+    service = FirefoxService()
+    return webdriver.Firefox(service=service, options=options)
 
 # Start Monitoring in Threads
 threads = [
