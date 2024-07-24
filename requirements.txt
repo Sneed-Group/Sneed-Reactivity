@@ -1,0 +1,4 @@
+psutil
+watchdog
+selenium
+pywin32; platform_system == "Windows"
