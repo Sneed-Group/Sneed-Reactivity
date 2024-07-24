@@ -1,0 +1,11 @@
+notePad.exe
+write.EXE
+MSpaint.exe
+gcc.exe
+krita.exe
+librewolf.EXe
+winword.exe
+excel.exe
+powerpnt.exe
+firefox.exe
+chrome.exe
