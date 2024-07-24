@@ -190,7 +190,6 @@ def get_gpu_usage():
     return 0
 
 def kill_suspicious_processes():
-    print("Killing suspicious processes...")
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             proc_name = proc.info['name'].lower()
@@ -245,13 +244,12 @@ def verify_tls_cert(url):
     except requests.exceptions.SSLError as e:
         print(f"TLS certificate error for {url}: {e}")
 
-def monitor_tls_certificates_and_processes():
+def monitor_tls_certificates():
     urls = monitored_urls
     while True:
-        kill_suspicious_processes()
         for url in urls:
             verify_tls_cert(url)
-        time.sleep(1)  # Check every second
+        time.sleep(60)  # Check every minute
 
 # Detecting Suspicious Browser Activity
 def monitor_browser(browser='chrome'):
@@ -292,12 +290,19 @@ def setup_firefox_driver():
     service = FirefoxService()
     return webdriver.Firefox(service=service, options=options)
 
+def realtimeAV():
+    while True:
+        print("Realtime AntiMalware active...")
+        kill_suspicious_processes()
+        time.sleep(1) # check for malware every second
+
 # Start Monitoring in Threads
 threads = [
     threading.Thread(target=start_file_system_monitor),
     threading.Thread(target=monitor_cpu_gpu_usage),
     threading.Thread(target=monitor_registry_changes),
-    threading.Thread(target=monitor_tls_certificates_and_processes),
+    threading.Thread(target=monitor_tls_certificates),
+    threading.Thread(target=realtimeAV),
     threading.Thread(target=monitor_browser, args=('chrome',)),
     threading.Thread(target=monitor_browser, args=('firefox',))
 ]
