@@ -1,2 +1,2 @@
 # Sneed-Reactivity
-Cross-Platform Open Reactive AV
+Cross-Platform Open Reactive AntiMalware
