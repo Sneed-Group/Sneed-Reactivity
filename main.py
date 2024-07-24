@@ -18,6 +18,8 @@ import certifi
 import getpass
 import tensorflow as tf  # TensorFlow for GPU monitoring
 import re  # Regular expressions for address detection
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 
 # Regular expressions for detecting crypto addresses
 bitcoin_regex = re.compile(r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}', re.IGNORECASE)
@@ -62,9 +64,10 @@ def get_folders_to_monitor():
     # Common user directories
     user_dirs = ['Downloads', 'Documents', 'Pictures', 'Videos']
     for d in user_dirs:
-        user_folder = Path.home() / d
-        if user_folder.exists():
-            folders.append(str(user_folder))
+        user_folder = Path.home()
+        for folder in user_folder.iterdir():
+            if folder.is_dir() and any(d.lower() in folder.name.lower() for d in user_dirs):
+                folders.append(str(folder))
 
     # System directories
     if os.name == 'nt':  # Windows
@@ -203,11 +206,26 @@ def verify_tls_cert(url):
         print(f"TLS certificate error for {url}: {e}")
 
 def monitor_tls_certificates():
-    urls = monitored_urls
     while True:
-        for url in urls:
+        for url in monitored_urls:
             verify_tls_cert(url)
         time.sleep(3600)  # Check every hour
+
+# Browser WebDriver Setup Functions
+def setup_chrome_driver():
+    chrome_options = ChromeOptions()
+    chrome_options.add_argument('--enable-logging')
+    chrome_options.add_argument('--v=1')
+    service = ChromeService(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
+
+def setup_firefox_driver():
+    firefox_options = FirefoxOptions()
+    firefox_options.log.level = "TRACE"
+    service = FirefoxService(GeckoDriverManager().install())
+    driver = webdriver.Firefox(service=service, options=firefox_options)
+    return driver
 
 # Detecting Suspicious Browser Activity
 def monitor_browser(browser='chrome'):
@@ -218,9 +236,14 @@ def monitor_browser(browser='chrome'):
     else:
         raise ValueError("Unsupported browser!")
 
-    while True:
-        try:
-            logs = driver.get_log('performance')
+    try:
+        while True:
+            logs = []
+            if browser == 'chrome':
+                logs = driver.get_log('browser')
+            elif browser == 'firefox':
+                logs = driver.get_log('browser')
+
             for entry in logs:
                 for url in monitored_urls:
                     if url in entry['message']:
@@ -232,10 +255,10 @@ def monitor_browser(browser='chrome'):
                                     print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
                                     proc.terminate()
                                     proc.wait()
-        except Exception as e:
-            print(f"Error in browser monitoring: {e}")
-        time.sleep(1)
-    driver.quit()
+    except Exception as e:
+        print(f"Error in browser monitoring: {e}")
+    finally:
+        driver.quit()
 
 # Start Monitoring in Threads
 threads = [
