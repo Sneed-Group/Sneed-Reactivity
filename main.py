@@ -293,6 +293,7 @@ def setup_firefox_driver():
 def realtimeAV():
     while True:
         kill_suspicious_processes()
+        print("Realtime AntiMalware active...")
         time.sleep(1) # check for malware every second
 
 # Start Monitoring in Threads
