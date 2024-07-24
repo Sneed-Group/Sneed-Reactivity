@@ -302,7 +302,7 @@ threads = [
     threading.Thread(target=monitor_cpu_gpu_usage),
     threading.Thread(target=monitor_registry_changes),
     threading.Thread(target=monitor_tls_certificates),
-    threading.Thread(target=kill_suspicious_processes),
+    threading.Thread(target=realtimeAV),
     threading.Thread(target=monitor_browser, args=('chrome',)),
     threading.Thread(target=monitor_browser, args=('firefox',))
 ]
