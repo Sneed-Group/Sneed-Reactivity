@@ -3,11 +3,16 @@ import time
 import psutil
 import subprocess
 import threading
+import win32security
+import winreg
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from pathlib import Path
+import requests
+import certifi
+import tensorflow as tf  # TensorFlow for GPU monitoring
 
 # Monitored URLs
 monitored_urls = [
@@ -22,6 +27,16 @@ monitored_urls = [
     "https://roblox.com",
     "https://microsoft.com",
     "https://hotmail.com"
+]
+
+# List of known mining processes
+mining_processes = [
+    "xmrig.exe",
+    "bfgminer.exe",
+    "cgminer.exe",
+    "ethminer.exe",
+    "nicehash.exe",
+    "miner.exe"
 ]
 
 # Folders to monitor
@@ -57,23 +72,29 @@ def load_bypassed_processes():
                 bypassed.add(line.strip().lower())
     return bypassed
 
-# File System Monitoring
-class MonitorHandler(FileSystemEventHandler):
-    def on_modified(self, event):
-        if event.src_path.endswith(('.doc', '.docx', '.png', '.pdf')):
-            print(f'Alert: {event.src_path} was modified!')
+bypassed_processes = load_bypassed_processes()
 
-            # Kill process modifying the file
-            for proc in psutil.process_iter(['pid', 'name', 'open_files']):
-                if any(file.path == event.src_path for file in proc.info['open_files']):
-                    if proc.info['name'].lower() not in bypassed_processes:
-                        print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
-                        proc.terminate()
-                        proc.wait()
+# File System Monitoring
+class SuspiciousFileHandler(FileSystemEventHandler):
+    def on_any_event(self, event):
+        if event.event_type in ['created', 'modified', 'deleted']:
+            file_owner = get_file_owner(event.src_path)
+            current_user = win32security.GetUserName()
+            if file_owner.lower() not in [current_user.lower(), "trustedinstaller"]:
+                print(f"Suspicious file operation: {event.event_type} {event.src_path} by {file_owner}")
+
+def get_file_owner(file_path):
+    try:
+        sd = win32security.GetFileSecurity(file_path, win32security.OWNER_SECURITY_INFORMATION)
+        owner_sid = sd.GetSecurityDescriptorOwner()
+        return win32security.LookupAccountSid(None, owner_sid)[0]
+    except Exception as e:
+        print(f"Error getting file owner: {e}")
+        return "Unknown"
 
 def start_file_system_monitor():
     observer = Observer()
-    event_handler = MonitorHandler()
+    event_handler = SuspiciousFileHandler()
     for folder in get_folders_to_monitor():
         observer.schedule(event_handler, path=folder, recursive=True)
     observer.start()
@@ -84,50 +105,84 @@ def start_file_system_monitor():
         observer.stop()
     observer.join()
 
-# Network Activity Monitoring
-def monitor_network():
+# Detect Excessive CPU Workloads
+def monitor_cpu_gpu_usage():
     while True:
-        connections = psutil.net_connections()
-        for conn in connections:
-            if conn.raddr and conn.raddr.port in [25, 587, 6667]:  # SMTP, IRC ports
-                print(f'Alert: Suspicious network activity detected: {conn}')
+        cpu_percent = psutil.cpu_percent(interval=1)
+        gpu_usage = get_gpu_usage()
 
-                # Kill process involved in suspicious network activity
-                for proc in psutil.process_iter(['pid', 'name', 'connections']):
-                    if any(conn.raddr and conn.raddr.port in [25, 587, 6667] for conn in proc.info['connections']):
-                        if proc.info['name'].lower() not in bypassed_processes:
-                            print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
-                            proc.terminate()
-                            proc.wait()
-        time.sleep(1)
+        if cpu_percent > 80 and gpu_usage < 10:
+            print("Warning: High CPU usage detected with low GPU usage.")
+            kill_suspicious_processes()
+        
+        if gpu_usage > 80 and cpu_percent < 10:
+            print("Warning: High GPU usage detected with low CPU usage.")
+        
+        time.sleep(5)
 
-# Access Control and Sandboxing
-def restrict_permissions_unix():
-    important_files = [str(Path.home() / d / '*') for d in ['Downloads', 'Documents', 'Pictures', 'Videos']]
-    for file in important_files:
-        subprocess.run(['chmod', 'o-rwx', file])
-        subprocess.run(['chattr', '+i', file])
+def get_gpu_usage():
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Check GPU memory usage
+            for gpu in gpus:
+                gpu_details = tf.config.experimental.get_memory_info(gpu.name)
+                memory_total = gpu_details['total']
+                memory_free = gpu_details['free']
+                usage = (memory_total - memory_free) / memory_total * 100
+                return usage
+        except Exception as e:
+            print(f"Error getting GPU usage: {e}")
+    return 0
 
-def restrict_permissions_windows():
-    import win32api
-    import win32security
-    import ntsecuritycon as con
+def kill_suspicious_processes():
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            proc_name = proc.info['name'].lower()
+            if proc_name in mining_processes and proc_name not in bypassed_processes:
+                print(f"Terminating suspicious process: {proc.info['name']} (PID: {proc.info['pid']})")
+                proc.terminate()
+                proc.wait()
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            print(f"Error terminating process: {e}")
 
-    important_files = [str(Path.home() / d / '*') for d in ['Downloads', 'Documents', 'Pictures', 'Videos']]
-    for file in important_files:
-        sd = win32security.GetFileSecurity(file, win32security.DACL_SECURITY_INFORMATION)
-        dacl = sd.GetSecurityDescriptorDacl()
-        user, domain, type = win32security.LookupAccountName("", "Everyone")
-        dacl.AddAccessDeniedAce(win32security.ACL_REVISION, con.FILE_ALL_ACCESS, user)
-        sd.SetSecurityDescriptorDacl(1, dacl, 0)
-        win32security.SetFileSecurity(file, win32security.DACL_SECURITY_INFORMATION, sd)
+# Monitor Registry Changes (Windows)
+def monitor_registry_changes():
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion"
+    registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ)
+    
+    while True:
+        try:
+            for i in range(winreg.QueryInfoKey(registry_key)[1]):  # Number of subkeys
+                subkey_name = winreg.EnumKey(registry_key, i)
+                print(f"Registry subkey detected: {subkey_name}")
+            
+            time.sleep(10)
+        except WindowsError as e:
+            print(f"Registry monitoring error: {e}")
 
-if os.name != 'nt':
-    restrict_permissions_unix()
-else:
-    restrict_permissions_windows()
+    winreg.CloseKey(registry_key)
 
-# Detecting and Preventing Cookie and Token Theft (Chrome and Firefox)
+# Verify TLS Certificates
+def verify_tls_cert(url):
+    try:
+        response = requests.get(url, verify=certifi.where())
+        print(f"TLS certificate valid for {url}")
+    except requests.exceptions.SSLError as e:
+        print(f"TLS certificate error for {url}: {e}")
+
+def monitor_tls_certificates():
+    urls = [
+        "https://google.com",
+        "https://discord.com"
+        # Add more URLs as needed
+    ]
+    while True:
+        for url in urls:
+            verify_tls_cert(url)
+        time.sleep(3600)  # Check every hour
+
+# Detecting Suspicious Browser Activity
 def monitor_browser(browser='chrome'):
     if browser == 'chrome':
         caps = DesiredCapabilities.CHROME
@@ -157,13 +212,12 @@ def monitor_browser(browser='chrome'):
         time.sleep(1)
     driver.quit()
 
-# Load bypassed processes
-bypassed_processes = load_bypassed_processes()
-
 # Start Monitoring in Threads
 threads = [
     threading.Thread(target=start_file_system_monitor),
-    threading.Thread(target=monitor_network),
+    threading.Thread(target=monitor_cpu_gpu_usage),
+    threading.Thread(target=monitor_registry_changes),
+    threading.Thread(target=monitor_tls_certificates),
     threading.Thread(target=monitor_browser, args=('chrome',)),
     threading.Thread(target=monitor_browser, args=('firefox',))
 ]
