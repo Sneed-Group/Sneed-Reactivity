@@ -12,6 +12,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from pathlib import Path
 import requests
 import certifi
+import getpass
 import tensorflow as tf  # TensorFlow for GPU monitoring
 import re  # Regular expressions for address detection
 
@@ -97,9 +98,18 @@ class SuspiciousFileHandler(FileSystemEventHandler):
 
 def get_file_owner(file_path):
     try:
-        sd = win32security.GetFileSecurity(file_path, win32security.OWNER_SECURITY_INFORMATION)
-        owner_sid = sd.GetSecurityDescriptorOwner()
-        return win32security.LookupAccountSid(None, owner_sid)[0]
+        # On Windows, use the current user’s name
+        if os.name == 'nt':
+            import win32security
+            sd = win32security.GetFileSecurity(file_path, win32security.OWNER_SECURITY_INFORMATION)
+            owner_sid = sd.GetSecurityDescriptorOwner()
+            owner, _ = win32security.LookupAccountSid(None, owner_sid)
+            return owner
+        else:
+            # On Unix-like systems, use the owner of the file
+            import pwd
+            file_stat = os.stat(file_path)
+            return pwd.getpwuid(file_stat.st_uid).pw_name
     except Exception as e:
         print(f"Error getting file owner: {e}")
         return "Unknown"
