@@ -1,4 +1,7 @@
 psutil
 watchdog
 selenium
+requests
+certifi
+tensorflow
 pywin32; platform_system == "Windows"
