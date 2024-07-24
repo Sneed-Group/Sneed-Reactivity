@@ -13,6 +13,12 @@ from pathlib import Path
 import requests
 import certifi
 import tensorflow as tf  # TensorFlow for GPU monitoring
+import re  # Regular expressions for address detection
+
+# Regular expressions for detecting crypto addresses
+bitcoin_regex = re.compile(r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}', re.IGNORECASE)
+ethereum_regex = re.compile(r'0x[a-fA-F0-9]{40}', re.IGNORECASE)
+monero_regex = re.compile(r'4[AB][A-Za-z0-9]{93}', re.IGNORECASE)
 
 # Monitored URLs
 monitored_urls = [
@@ -29,7 +35,7 @@ monitored_urls = [
     "https://hotmail.com"
 ]
 
-# List of known mining processes
+# Updated list of known mining processes
 mining_processes = [
     "xmrig.exe",
     "bfgminer.exe",
@@ -142,11 +148,21 @@ def get_gpu_usage():
     return 0
 
 def kill_suspicious_processes():
-    for proc in psutil.process_iter(['pid', 'name']):
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             proc_name = proc.info['name'].lower()
+            cmdline = " ".join(proc.info['cmdline']).lower()
+
             if proc_name in mining_processes and proc_name not in bypassed_processes:
-                print(f"Terminating suspicious process: {proc.info['name']} (PID: {proc.info['pid']})")
+                print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
+                proc.terminate()
+                proc.wait()
+
+            # Check for crypto addresses in command line arguments
+            if (bitcoin_regex.search(cmdline) or
+                ethereum_regex.search(cmdline) or
+                monero_regex.search(cmdline)) and proc_name not in bypassed_processes:
+                print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']})")
                 proc.terminate()
                 proc.wait()
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
