@@ -246,7 +246,7 @@ def kill_suspicious_processes():
             # Scan files for malware as they launch and kill if potentially malicious.
             for file_path in cmdline:
                 if os.path.isfile(file_path):
-                    if scan_for_malware(file_path) and os.path.basename(bypassed_processes):
+                    if scan_for_malware(file_path):
                         print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
                         proc.terminate()
                         proc.wait()
@@ -332,12 +332,24 @@ def realtimeAV():
         kill_suspicious_processes()
         time.sleep(1) # check for malware every second
 
+def threadCounter():
+    previous_count = 0
+    current_count = 0
+    while True:
+        previous_count = threading.active_count()
+        print(f"Active AntiMalware Threads: {current_count}")
+        if current_count < previous_count and previous_count - current_count > -1:
+            print("WARNING: THREAD KILL DETECTED!")
+        time.sleep(3) # check for malware every second
+        current_count = threading.active_count()
+
 # Start Monitoring in Threads
 threads = [
     threading.Thread(target=start_file_system_monitor),
     threading.Thread(target=monitor_cpu_gpu_usage),
     threading.Thread(target=monitor_registry_changes),
     threading.Thread(target=realtimeAV),
+    threading.Thread(target=threadCounter),
     threading.Thread(target=monitor_tls_certificates),
     threading.Thread(target=monitor_browser, args=('chrome',)),
     threading.Thread(target=monitor_browser, args=('firefox',))
