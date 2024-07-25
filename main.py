@@ -246,7 +246,7 @@ def kill_suspicious_processes():
             # Scan files for malware as they launch and kill if potentially malicious.
             for file_path in cmdline:
                 if os.path.isfile(file_path):
-                    if scan_for_malware(file_path):
+                    if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name.loiwer() != "csrss.exe" and proc_name.lower() != "ntoskrnl.exe":
                         print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
                         proc.terminate()
                         proc.wait()
