@@ -311,8 +311,8 @@ def monitor_browser(browser='chrome'):
                                     print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
                                     proc.terminate()
                                     proc.wait()
-            except (Exception) as e:
-                print(f"Exception while monitoring browser behavior - ${e}")
+        except (Exception) as e:
+            print(f"Exception while monitoring browser behavior - ${e}")
         time.sleep(1)
     driver.quit()
 
