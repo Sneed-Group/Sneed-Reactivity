@@ -4,13 +4,13 @@ import psutil
 import subprocess
 import threading
 import win32security
+import win32process
 import winreg
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service as ChromeService
 from pathlib import Path
 import requests
@@ -38,9 +38,12 @@ def load_yara_rules():
 yara_rules = load_yara_rules()
 
 # Regular expressions for detecting crypto addresses
-bitcoin_regex = re.compile(r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}', re.IGNORECASE)
-ethereum_regex = re.compile(r'0x[a-fA-F0-9]{40}', re.IGNORECASE)
-monero_regex = re.compile(r'4[AB][A-Za-z0-9]{93}', re.IGNORECASE)
+# Bitcoin address regex
+bitcoin_regex = re.compile(r"^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$", re.IGNORECASE)
+# Ethereum address regex
+ethereum_regex = re.compile(r"^0x[a-fA-F0-9]{40}$", re.IGNORECASE)
+# Monero address regex
+monero_regex = re.compile(r"^4[0-9AB][0-9a-f]{93}$", re.IGNORECASE)
 
 # Monitored URLs
 monitored_urls = [
@@ -104,9 +107,9 @@ def load_bypassed_processes():
         with open("bypassed.txt", "r") as f:
             for line in f:
                 bypassed.add(line.strip().lower())
+                #print(f"Loaded exception {line.strip().lower()}!") # FOR DEBUGGING
     return bypassed
 
-bypassed_processes = load_bypassed_processes()
 
 # File System Monitoring
 class SuspiciousFileHandler(FileSystemEventHandler):
@@ -190,10 +193,21 @@ def get_gpu_usage():
     return 0
 
 def kill_suspicious_processes():
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter(['pid', 'name']):
         try:
             proc_name = proc.info['name'].lower()
-            cmdline = " ".join(proc.info['cmdline']).lower()
+            cmdline = []
+
+            # Attempt to get command line arguments
+            try:
+                cmdline = proc.cmdline()
+            except psutil.AccessDenied:
+                # Fallback for access denied
+                print(f"Access denied for process {proc.info['name']} (PID: {proc.info['pid']})")
+                continue
+
+            cmdline_str = " ".join(cmdline).lower()
+            bypassed_processes = load_bypassed_processes()
 
             if proc_name in mining_processes and proc_name not in bypassed_processes:
                 print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
@@ -201,17 +215,17 @@ def kill_suspicious_processes():
                 proc.wait()
 
             # Check for crypto addresses in command line arguments
-            if (bitcoin_regex.search(cmdline) or
-                ethereum_regex.search(cmdline) or
-                monero_regex.search(cmdline)) and proc_name not in bypassed_processes:
-                print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']})")
+            if (bitcoin_regex.search(cmdline_str) or
+                ethereum_regex.search(cmdline_str) or
+                monero_regex.search(cmdline_str)) and proc_name not in bypassed_processes:
+                print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']}) due to {cmdline_str}.")
                 proc.terminate()
                 proc.wait()
 
             # Scan files for malware as they launch and kill if potentially malicious.
-            for file_path in proc.info.get('cmdline', []):
+            for file_path in cmdline:
                 if os.path.isfile(file_path):
-                    if scan_for_malware(file_path):
+                    if scan_for_malware(file_path) and os.path.basename(bypassed_processes):
                         print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
                         proc.terminate()
                         proc.wait()
@@ -270,6 +284,7 @@ def monitor_browser(browser='chrome'):
                     # Kill process involved in suspicious browser activity
                     for proc in psutil.process_iter(['pid', 'name', 'connections']):
                         if any(url in conn.raddr for conn in proc.info['connections']):
+                            bypassed_processes = load_bypassed_processes()
                             if proc.info['name'].lower() not in bypassed_processes:
                                 print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
                                 proc.terminate()
@@ -290,46 +305,21 @@ def setup_firefox_driver():
     service = FirefoxService()
     return webdriver.Firefox(service=service, options=options)
 
-def thread_counter():
+def realtimeAV():
     while True:
-        print(f"Active anti-malware threads: {threading.active_count()}")
-        time.sleep(10) # Prints active count of Anti-Malware threads every 10 seconds.
-
-# Similar to "kill_suspicious_processes" but just the essentials (for optimization.)
-def realtime_av():
-    while True:
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                proc_name = proc.info['name'].lower()
-                cmdline = " ".join(proc.info['cmdline']).lower()
-
-                if proc_name in mining_processes and proc_name not in bypassed_processes:
-                    print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
-                    proc.terminate()
-                    proc.wait()
-
-                # Scan files for malware as they launch and kill if potentially malicious.
-                for file_path in proc.info.get('cmdline', []):
-                    if os.path.isfile(file_path):
-                        if scan_for_malware(file_path):
-                            print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
-                            proc.terminate()
-                            proc.wait()
-            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                print(f"Error terminating process: {e}")
-        time.sleep(1)
+        print(f"Realtime AntiMalware active")
+        kill_suspicious_processes()
+        time.sleep(1) # check for malware every second
 
 # Start Monitoring in Threads
 threads = [
     threading.Thread(target=start_file_system_monitor),
     threading.Thread(target=monitor_cpu_gpu_usage),
     threading.Thread(target=monitor_registry_changes),
-    threading.Thread(target=realtime_av),
+    threading.Thread(target=realtimeAV),
     threading.Thread(target=monitor_tls_certificates),
     threading.Thread(target=monitor_browser, args=('chrome',)),
-    threading.Thread(target=monitor_browser, args=('firefox',)),
-    threading.Thread(target=thread_counter)
-
+    threading.Thread(target=monitor_browser, args=('firefox',))
 ]
 
 for thread in threads:

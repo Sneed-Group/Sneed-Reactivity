@@ -4,9 +4,16 @@ MSpaint.exe
 gcc.exe
 krita.exe
 librewolf.EXe
-winword.exe
-excel.exe
-powerpnt.exe
-firefox.exe
-chrome.exe
-gimp.exe
+WINword.exe
+eXceL.exe
+PowerPnt.exe
+FireFOx.eXE
+ChROmE.exe
+GimP.exE
+BrAvE.ExE
+cOdE.exe
+GitHubDesktop.exe
+\\\\\\!!!HERE BE DRAGONS!!! (only remove if you know what you are doing!!!)///////
+rEgIstrY
+LsAIsO.exE
+MeMComPReSsION
