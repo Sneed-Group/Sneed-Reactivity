@@ -15,5 +15,5 @@ Cross-Platform Open Reactive AntiMalware
 
 * LICENSE-YARA-RULES-REVERSINGLABS - ReversingLab's Yara Rules (under the yara-ReversingLabs subdirectory)
 * LICENSE-YARA-RULES-NEO23X0 - NEO23X0's Yara Rules (under the yara-Neo23x0 subdirectory)
-* LICENSE - Our code. (Pretty much any .py file in the main directory as well as requirements.txt)
 * mikesxrs sadly had no license in his Yara Rules repo, so I guess take that for what you will.
+* LICENSE - Our code. (Pretty much any .py file in the main directory as well as requirements.txt)
