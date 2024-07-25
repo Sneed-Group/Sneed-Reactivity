@@ -7,7 +7,7 @@ Cross-Platform Open Reactive AntiMalware
 * VirusTotal - Creating Yara
 * [ReversingLabs - Creating Some Yara Rules](https://github.com/reversinglabs/reversinglabs-yara-rules)
 * [Yara23x0 - Creating more Yara Rules](https://github.com/Neo23x0/signature-base)
-* [mikesxrc - Creating a compilation of even MORE yara rules (had to delete some due to errors)](https://github.com/mikesxrs/Open-Source-YARA-rules)
+* [mikesxrc - Creating a compilation of even MORE yara rules (had to delete some to clean the console a tad...)](https://github.com/mikesxrs/Open-Source-YARA-rules)
 * Sneed Group - Creating the idea/code
 * ChatGPT/Gemini - Helping code this amazing project
 
