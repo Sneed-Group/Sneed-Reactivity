@@ -203,7 +203,7 @@ def kill_suspicious_processes():
                 cmdline = proc.cmdline()
             except psutil.AccessDenied:
                 # Fallback for access denied
-                print(f"Access denied for process {proc.info['name']} (PID: {proc.info['pid']})")
+                print(f"Access denied getting CLI args for process {proc.info['name']} (PID: {proc.info['pid']})")
                 continue
 
             cmdline_str = " ".join(cmdline).lower()
