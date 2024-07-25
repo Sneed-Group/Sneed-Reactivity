@@ -11,5 +11,5 @@ Cross-Platform Open Reactive AntiMalware
 
 ## Licensing Details
 
-* LICENSE-YARA-RULES - ReversingLab's Yara Rules (under the yara subdirectory)
+* LICENSE-YARA-RULES - ReversingLab's Yara Rules (everything under the yara subdirectory)
 * LICENSE - Our code. (Pretty much anything else.)
