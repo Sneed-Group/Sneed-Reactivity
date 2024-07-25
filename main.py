@@ -174,15 +174,6 @@ def monitor_cpu_gpu_usage():
         
         time.sleep(5)
 
-def realtime_av():
-    while True:
-        try:
-            print("Realtime AntiMalware active")
-            kill_suspicious_processes()
-        except Exception as e:
-            print(f"Error in realtimeAV: {e}")
-        time.sleep(1)  # Check for malware every second
-
 def get_gpu_usage():
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
@@ -303,6 +294,30 @@ def thread_counter():
     while True:
         print(f"Active anti-malware threads: {threading.active_count()}")
         time.sleep(10) # Prints active count of Anti-Malware threads every 10 seconds.
+
+# Similar to "kill_suspicious_processes" but just the essentials (for optimization.)
+def realtime_av():
+    while True:
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                proc_name = proc.info['name'].lower()
+                cmdline = " ".join(proc.info['cmdline']).lower()
+
+                if proc_name in mining_processes and proc_name not in bypassed_processes:
+                    print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
+                    proc.terminate()
+                    proc.wait()
+
+                # Scan files for malware as they launch and kill if potentially malicious.
+                for file_path in proc.info.get('cmdline', []):
+                    if os.path.isfile(file_path):
+                        if scan_for_malware(file_path):
+                            print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
+                            proc.terminate()
+                            proc.wait()
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                print(f"Error terminating process: {e}")
+        time.sleep(1)
 
 # Start Monitoring in Threads
 threads = [
