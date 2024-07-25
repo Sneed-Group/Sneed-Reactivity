@@ -23,7 +23,28 @@ import yara  # YARA for malware scanning
 # YARA Rules
 def load_yara_rules():
     yara_rules = []
-    yara_dir = Path('yara')
+    yara_dir = Path('yara-ReversingLabs')
+    if yara_dir.exists() and yara_dir.is_dir():
+        for yara_file in yara_dir.rglob('*.yar'):
+            try:
+                rule = yara.compile(filepath=str(yara_file))
+                yara_rules.append(rule)
+            except Exception as e:
+                print(f"Error compiling YARA rule {yara_file}: {e}")
+    else:
+        print(f"YARA rules directory not found: {yara_dir}")
+    time.sleep(1)
+    yara_dir = Path('yara-mikesxrs')
+    if yara_dir.exists() and yara_dir.is_dir():
+        for yara_file in yara_dir.rglob('*.yar'):
+            try:
+                rule = yara.compile(filepath=str(yara_file))
+                yara_rules.append(rule)
+            except Exception as e:
+                print(f"Error compiling YARA rule {yara_file}: {e}")
+    else:
+        print(f"YARA rules directory not found: {yara_dir}")
+    yara_dir = Path('yara-Neo23x0')
     if yara_dir.exists() and yara_dir.is_dir():
         for yara_file in yara_dir.rglob('*.yar'):
             try:
