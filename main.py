@@ -321,7 +321,8 @@ def monitor_browser(browser='chrome'):
         driver = setup_firefox_driver()
     else:
         raise ValueError("Unsupported browser!")
-
+    bypassed_processes = load_bypassed_processes()  # Load bypassed processes
+    
     while True:
         try:
             logs = driver.get_log('performance')
@@ -332,21 +333,28 @@ def monitor_browser(browser='chrome'):
 
                         # Kill process involved in suspicious browser activity
                         for proc in psutil.process_iter(['pid', 'name', 'connections']):
-                            if any(url in conn.raddr for conn in proc.info['connections']):
-                                bypassed_processes = load_bypassed_processes()
-                                if proc.info['name'].lower() not in bypassed_processes and proc_name not in critical_processes:
-                                    print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
-                                    proc.terminate()
-                                    proc.wait()
-        except (Exception) as e:
-            print(f"Exception while monitoring browser behavior - ${e}")
+                            try:
+                                if any(url in conn.raddr for conn in proc.info['connections']):
+                                    if proc.info['name'].lower() not in bypassed_processes and proc.info['name'].lower() not in critical_processes:
+                                        print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
+                                        proc.terminate()
+                                        proc.wait()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                                # Handle the case where process info is not accessible
+                                continue
+        except Exception as e:
+            print(f"Exception while monitoring browser behavior - {e}")
         time.sleep(1)
+
     driver.quit()
 
 # Setup Chrome and Firefox Drivers
 def setup_chrome_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # Run in headless mode
+    chrome_options.add_argument("--enable-logging") # Enable logging
+    chrome_options.add_argument("--v=1")  # Adjust verbosity level if needed
+    chrome_options.add_argument("--auto-open-devtools-for-tabs") # Open Dev Tools
     service = ChromeService()
     return webdriver.Chrome(service=service, options=options)
 
@@ -359,7 +367,10 @@ def setup_firefox_driver():
 def realtimeAV():
     while True:
         print(f"Realtime AntiMalware active")
-        kill_suspicious_processes()
+        try:
+            kill_suspicious_processes()
+        except:
+            print("Realtime AntiMalware error. :()")
         time.sleep(1) # check for malware every second
 
 def threadCounter():
