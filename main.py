@@ -23,7 +23,7 @@ import yara  # YARA for malware scanning
 critical_processes = [
     "System Idle Process", "System", "smss.exe", "csrss.exe", "wininit.exe",
     "services.exe", "lsass.exe", "svchost.exe", "winlogon.exe", "explorer.exe",
-    "dwm.exe", "ntoskrnl.exe", "hal.dll", "kernel32.dll", "user32.dll",
+    "dwm.exe", "ntoskrnl.exe", "hal.dll", "kernel32.dll", "user32.dll", "WmiPrvSE.exe"
     "kernel_task", "launchd", "loginwindow", "windowserver", "cfprefsd",
     "usernoted", "hidd", "mds", "kernel", "syslogd", "distnoted", "cloudd",
     "securityd", "init", "systemd", "kthreadd", "rcu_sched", "ksoftirqd/0",
@@ -221,6 +221,7 @@ def monitor_cpu_gpu_usage():
         
         if gpu_usage > 80 and cpu_percent < 10:
             print("Warning: High GPU usage detected with low CPU usage.")
+            kill_suspicious_processes()
         
         time.sleep(5)
 
@@ -273,7 +274,7 @@ def kill_suspicious_processes():
             for file_path in cmdline:
                 if os.path.isfile(file_path):
                     if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name not in critical_processes:
-                        print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
+                        print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']}) NOW...")
                         proc.terminate()
                         proc.wait()
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
