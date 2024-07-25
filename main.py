@@ -20,6 +20,20 @@ import tensorflow as tf  # TensorFlow for GPU monitoring
 import re  # Regular expressions for address detection
 import yara  # YARA for malware scanning
 
+critical_processes = [
+    "System Idle Process", "System", "smss.exe", "csrss.exe", "wininit.exe",
+    "services.exe", "lsass.exe", "svchost.exe", "winlogon.exe", "explorer.exe",
+    "dwm.exe", "ntoskrnl.exe", "hal.dll", "kernel32.dll", "user32.dll",
+    "kernel_task", "launchd", "loginwindow", "windowserver", "cfprefsd",
+    "usernoted", "hidd", "mds", "kernel", "syslogd", "distnoted", "cloudd",
+    "securityd", "init", "systemd", "kthreadd", "rcu_sched", "ksoftirqd/0",
+    "migration/0", "watchdog/0", "kworker/0:0H", "kdevtmpfs", "netns",
+    "khungtaskd", "khelper", "kworker/u2:1", "kswapd0", "fsnotify_mark",
+    "systemd-journald", "systemd-logind", "udevd", "dbus-daemon", "sshd",
+    "cron", "atd"
+]
+
+
 # YARA Rules
 def load_yara_rules():
     yara_rules = []
@@ -230,7 +244,7 @@ def kill_suspicious_processes():
             cmdline_str = " ".join(cmdline).lower()
             bypassed_processes = load_bypassed_processes()
 
-            if proc_name in mining_processes and proc_name not in bypassed_processes:
+            if proc_name in mining_processes and proc_name not in bypassed_processes and proc_name not in critical_processes:
                 print(f"Terminating suspicious mining process: {proc.info['name']} (PID: {proc.info['pid']})")
                 proc.terminate()
                 proc.wait()
@@ -238,7 +252,7 @@ def kill_suspicious_processes():
             # Check for crypto addresses in command line arguments
             if (bitcoin_regex.search(cmdline_str) or
                 ethereum_regex.search(cmdline_str) or
-                monero_regex.search(cmdline_str)) and proc_name not in bypassed_processes:
+                monero_regex.search(cmdline_str)) and proc_name not in bypassed_processes and proc_name not in critical_processes:
                 print(f"Terminating process with crypto address: {proc.info['name']} (PID: {proc.info['pid']}) due to {cmdline_str}.")
                 proc.terminate()
                 proc.wait()
@@ -246,7 +260,7 @@ def kill_suspicious_processes():
             # Scan files for malware as they launch and kill if potentially malicious.
             for file_path in cmdline:
                 if os.path.isfile(file_path):
-                    if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name.lower() != "csrss.exe" and proc_name.lower() != "ntoskrnl.exe":
+                    if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name not in critical_processes:
                         print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
                         proc.terminate()
                         proc.wait()
@@ -307,7 +321,7 @@ def monitor_browser(browser='chrome'):
                         for proc in psutil.process_iter(['pid', 'name', 'connections']):
                             if any(url in conn.raddr for conn in proc.info['connections']):
                                 bypassed_processes = load_bypassed_processes()
-                                if proc.info['name'].lower() not in bypassed_processes:
+                                if proc.info['name'].lower() not in bypassed_processes and proc_name not in critical_processes:
                                     print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
                                     proc.terminate()
                                     proc.wait()
