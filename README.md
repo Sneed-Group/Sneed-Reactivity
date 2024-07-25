@@ -2,6 +2,8 @@
 
 Cross-Platform Open Reactive AntiMalware
 
+[Download here.](https://github.com/Sneed-Group/Sneed-Reactivity/releases/tag/0.2)
+
 ## Credits
 
 * VirusTotal - Creating Yara
