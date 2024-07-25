@@ -13,6 +13,7 @@ GimP.exE
 BrAvE.ExE
 cOdE.exe
 GitHubDesktop.exe
+DISCorD.exe
 \\\\\\!!!HERE BE DRAGONS!!! (only remove if you know what you are doing!!!)///////
 rEgIstrY
 LsAIsO.exE
