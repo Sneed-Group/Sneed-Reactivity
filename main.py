@@ -174,6 +174,15 @@ def monitor_cpu_gpu_usage():
         
         time.sleep(5)
 
+def realtime_av():
+    while True:
+        try:
+            print("Realtime AntiMalware active")
+            kill_suspicious_processes()
+        except Exception as e:
+            print(f"Error in realtimeAV: {e}")
+        time.sleep(1)  # Check for malware every second
+
 def get_gpu_usage():
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
@@ -289,15 +298,6 @@ def setup_firefox_driver():
     options.add_argument("--headless")  # Run in headless mode
     service = FirefoxService()
     return webdriver.Firefox(service=service, options=options)
-
-def realtime_av():
-    while True:
-        try:
-            print("Realtime AntiMalware active")
-            kill_suspicious_processes()
-        except Exception as e:
-            print(f"Error in realtimeAV: {e}")
-        time.sleep(1)  # Check for malware every second
 
 def thread_counter():
     while True:
