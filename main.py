@@ -246,7 +246,7 @@ def kill_suspicious_processes():
             # Scan files for malware as they launch and kill if potentially malicious.
             for file_path in cmdline:
                 if os.path.isfile(file_path):
-                    if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name.loiwer() != "csrss.exe" and proc_name.lower() != "ntoskrnl.exe":
+                    if scan_for_malware(file_path) and proc_name not in bypassed_processes and proc_name.lower() != "csrss.exe" and proc_name.lower() != "ntoskrnl.exe":
                         print(f"Terminating potentially malicious process {proc.info['name']}  (PID: {proc.info['pid']} NOW...")
                         proc.terminate()
                         proc.wait()
@@ -296,20 +296,23 @@ def monitor_browser(browser='chrome'):
         raise ValueError("Unsupported browser!")
 
     while True:
-        logs = driver.get_log('performance')
-        for entry in logs:
-            for url in monitored_urls:
-                if url in entry['message']:
-                    print(f'Alert: Potential cookie or token theft attempt detected on {url}!')
+        try:
+            logs = driver.get_log('performance')
+            for entry in logs:
+                for url in monitored_urls:
+                    if url in entry['message']:
+                        print(f'Alert: Potential cookie or token theft attempt detected on {url}!')
 
-                    # Kill process involved in suspicious browser activity
-                    for proc in psutil.process_iter(['pid', 'name', 'connections']):
-                        if any(url in conn.raddr for conn in proc.info['connections']):
-                            bypassed_processes = load_bypassed_processes()
-                            if proc.info['name'].lower() not in bypassed_processes:
-                                print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
-                                proc.terminate()
-                                proc.wait()
+                        # Kill process involved in suspicious browser activity
+                        for proc in psutil.process_iter(['pid', 'name', 'connections']):
+                            if any(url in conn.raddr for conn in proc.info['connections']):
+                                bypassed_processes = load_bypassed_processes()
+                                if proc.info['name'].lower() not in bypassed_processes:
+                                    print(f'Alert: Killing suspicious process {proc.info["name"]} (PID: {proc.info["pid"]})')
+                                    proc.terminate()
+                                    proc.wait()
+            except (Exception) as e:
+                print(f"Exception while monitoring browser behavior - ${e}")
         time.sleep(1)
     driver.quit()
 
@@ -338,7 +341,7 @@ def threadCounter():
     while True:
         previous_count = threading.active_count()
         print(f"Active AntiMalware Threads: {current_count}")
-        if current_count < previous_count and previous_count - current_count > -1:
+        if current_count > previous_count and current_count - previous_count > -1:
             print("WARNING: THREAD KILL DETECTED!")
         time.sleep(3) # check for malware every second
         current_count = threading.active_count()
