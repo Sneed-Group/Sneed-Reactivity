@@ -111,6 +111,19 @@ mining_processes = [
     "nicehash"
 ]
 
+def does_not_contain_critical_process(file_path):
+    """
+    Check if the file_path does not contain any of the critical processes in the critical_processes list.
+
+    Parameters:
+    - file_path (str): The path of the file to check.
+    - critical_processes (list): List of critical process names to check against.
+
+    Returns:
+    - bool: True if file_path does not contain any critical process names, False otherwise.
+    """
+    return all(process not in file_path for process in critical_processes)
+
 # Folders to monitor
 def get_folders_to_monitor():
     folders = []
@@ -192,8 +205,7 @@ def scan_for_malware(file_path):
     if yara_rules:
         for rule in yara_rules:
             matches = rule.match(filepath=file_path)
-            if matches:
-                print(f"Malware detected in file: {file_path}")
+            if matches and does_not_contain_critical_process(file_path):
                 return True
     return False
 
