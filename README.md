@@ -1,4 +1,4 @@
-# Sneed-Reactivity <img align="right" src="ascii-shield.png">
+# Sneed-Reactivity <img align="right" src="ascii-shield.png" width="25%">
 
 Cross-Platform Open Reactive AntiMalware
 
